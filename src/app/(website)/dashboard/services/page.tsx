@@ -208,7 +208,7 @@ export default function ServicesPage() {
             <div className="col-span-2 ml-3">Actions</div>
           </div>
         </CardHeader>
-        
+
         <CardContent className="pt-0">
           <div className="border-t border-gray-200 mb-4"></div>
           <div className="space-y-4">
