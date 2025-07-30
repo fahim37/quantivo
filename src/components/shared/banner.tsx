@@ -33,12 +33,32 @@ export default function Banner() {
             <div className="container mx-auto h-screen flex items-center">
                 <div className="lg:max-w-[55%] text-center lg:text-start">
                     <div className="pb-2 absolute top-32 -mt-10 text-sm lg:text-base text-gray-200">
-                        {breadcrumbs.map((crumb, idx) => (
-                            <span key={idx}>
-                                {crumb}
-                                {idx < breadcrumbs.length - 1 && " > "}
-                            </span>
-                        ))}
+                        {breadcrumbs.map((crumb, idx) => {
+                            const isHome = idx === 0;
+                            const isLast = idx === breadcrumbs.length - 1;
+
+                            // Rebuild the link for each crumb if you want full breadcrumb navigation.
+                            const href = isHome
+                                ? "/"
+                                : "/" + pathname
+                                    .split("/")
+                                    .filter(Boolean)
+                                    .slice(0, idx)
+                                    .join("/");
+
+                            return (
+                                <span key={idx}>
+                                    {isHome ? (
+                                        <Link href={href} className="hover:underline">
+                                            {crumb}
+                                        </Link>
+                                    ) : (
+                                        <span>{crumb}</span>
+                                    )}
+                                    {!isLast && " > "}
+                                </span>
+                            );
+                        })}
                     </div>
                     <h1 className="font-bold lg:leading-[120%] text-[30px] lg:text-6xl pb-8">
                         Smarter Metrics. Sharper Business Moves.
