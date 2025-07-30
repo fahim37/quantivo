@@ -20,6 +20,7 @@ interface DataSet {
         firstName?: string
         lastName?: string
         email?: string
+        imageLink?: string
     }
     dataSets: string
     createdAt: string
@@ -42,27 +43,38 @@ interface Payment {
     status: string
 }
 
+interface PaginationResponse {
+    success: boolean
+    message: string
+    data: DataSet[]
+    total: number
+    page: number
+    totalPages: number
+}
+
 export default function AdminDashboard() {
     const [dataSets, setDataSets] = useState<DataSet[]>([])
     const [payments, setPayments] = useState<Payment[]>([])
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
+    const [totalItems, setTotalItems] = useState(0)
+    const [itemsPerPage] = useState(7) // Fixed items per page
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [selectedDataSet, setSelectedDataSet] = useState<DataSet | null>(null)
     const [selectedUserId, setSelectedUserId] = useState("")
     const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-
+    const [datasetName, setDatasetName] = useState<string>("")
 
     const loadData = async () => {
         try {
             setLoading(true)
-            const response = await fetchDataSets(currentPage, 10)
+            const response: PaginationResponse = await fetchDataSets(currentPage, itemsPerPage)
             if (response.success) {
                 setDataSets(response.data)
-                // Mock pagination data since it's not in the response
-                setTotalPages(Math.ceil(response.data.length / 10) || 1)
+                setTotalPages(response.totalPages)
+                setTotalItems(response.total)
             }
         } catch (error) {
             console.error("Error loading datasets:", error)
@@ -89,15 +101,17 @@ export default function AdminDashboard() {
 
     const handleCreateDataSet = async () => {
         if (!selectedUserId || !uploadedFile) return
-
         try {
             const formData = new FormData()
             formData.append("file", uploadedFile)
-
+            formData.append("dataSetName", datasetName)
             await createDataSet(formData, selectedUserId)
             setIsCreateModalOpen(false)
             setSelectedUserId("")
             setUploadedFile(null)
+            setDatasetName("")
+            // Reset to first page after creating new dataset
+            setCurrentPage(1)
             loadData()
         } catch (error) {
             console.error("Error creating dataset:", error)
@@ -106,11 +120,9 @@ export default function AdminDashboard() {
 
     const handleEditDataSet = async () => {
         if (!selectedDataSet || !uploadedFile) return
-
         try {
             const formData = new FormData()
             formData.append("file", uploadedFile)
-
             await updateDataSet(selectedDataSet._id, formData)
             setIsEditModalOpen(false)
             setSelectedDataSet(null)
@@ -123,10 +135,14 @@ export default function AdminDashboard() {
 
     const handleDeleteDataSet = async (id: string) => {
         if (!confirm("Are you sure you want to delete this dataset?")) return
-
         try {
             await deleteDataSet(id)
-            loadData()
+            // If we're on the last page and it becomes empty, go to previous page
+            if (dataSets.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1)
+            } else {
+                loadData()
+            }
         } catch (error) {
             console.error("Error deleting dataset:", error)
         }
@@ -146,6 +162,38 @@ export default function AdminDashboard() {
         const users = payments.map((payment) => payment.userId)
         const uniqueUsers = users.filter((user, index, self) => index === self.findIndex((u) => u._id === user._id))
         return uniqueUsers
+    }
+
+    // Calculate pagination display info
+    const startItem = (currentPage - 1) * itemsPerPage + 1
+    const endItem = Math.min(currentPage * itemsPerPage, totalItems)
+
+    // Generate page numbers for pagination
+    const getPageNumbers = () => {
+        const pages = []
+        const maxVisiblePages = 5
+
+        if (totalPages <= maxVisiblePages) {
+            // Show all pages if total pages is less than or equal to max visible
+            for (let i = 1; i <= totalPages; i++) {
+                pages.push(i)
+            }
+        } else {
+            // Show pages around current page
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+            const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+
+            // Adjust start page if we're near the end
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1)
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                pages.push(i)
+            }
+        }
+
+        return pages
     }
 
     return (
@@ -170,6 +218,8 @@ export default function AdminDashboard() {
                             </DialogHeader>
                             <div className="space-y-4">
                                 <div className="space-y-2">
+                                    <Label htmlFor="name">Dataset Name</Label>
+                                    <Input type="text" id="name" value={datasetName} onChange={(e) => setDatasetName(e.target.value)} />
                                     <Label htmlFor="company">Company Name</Label>
                                     <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                                         <SelectTrigger>
@@ -225,13 +275,13 @@ export default function AdminDashboard() {
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center py-8">
+                                        <TableCell colSpan={4} className="text-center py-8">
                                             Loading...
                                         </TableCell>
                                     </TableRow>
                                 ) : dataSets.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center py-8">
+                                        <TableCell colSpan={4} className="text-center py-8">
                                             No datasets found
                                         </TableCell>
                                     </TableRow>
@@ -241,13 +291,15 @@ export default function AdminDashboard() {
                                             <TableCell>
                                                 <div className="flex items-center space-x-3">
                                                     <Avatar>
-                                                        <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
+                                                        <AvatarImage
+                                                            src={dataSet?.userId?.imageLink || "/placeholder.svg"}
+                                                            alt={dataSet?.userId?.firstName}
+                                                        />
                                                         <AvatarFallback>{dataSet?.userId?.firstName?.charAt(0)}</AvatarFallback>
                                                     </Avatar>
                                                     <div>
                                                         <div className="font-medium">
-                                                            {
-                                                                `${dataSet?.userId?.firstName || ""} ${dataSet?.userId?.lastName || ""}`.trim() ||
+                                                            {`${dataSet?.userId?.firstName || ""} ${dataSet?.userId?.lastName || ""}`.trim() ||
                                                                 "Dataset"}
                                                         </div>
                                                         <div className="text-sm text-gray-500">{dataSet?.userId?.email || "Email address"}</div>
@@ -289,39 +341,43 @@ export default function AdminDashboard() {
                 </Card>
 
                 {/* Pagination */}
-                <div className="flex justify-between items-center mt-6">
-                    <div className="text-sm text-gray-600">
-                        Showing 1 to {Math.min(10, dataSets.length)} of {dataSets.length} results
-                    </div>
-                    <div className="flex space-x-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                            disabled={currentPage === 1}
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </Button>
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => (
+                {!loading && totalItems > 0 && (
+                    <div className="flex justify-between items-center mt-6">
+                        <div className="text-sm text-gray-600">
+                            Showing {startItem} to {endItem} of {totalItems} results
+                        </div>
+                        <div className="flex space-x-2">
                             <Button
-                                key={i + 1}
-                                variant={currentPage === i + 1 ? "default" : "outline"}
+                                variant="outline"
                                 size="sm"
-                                onClick={() => setCurrentPage(i + 1)}
+                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                disabled={currentPage === 1}
                             >
-                                {i + 1}
+                                <ChevronLeft className="w-4 h-4" />
                             </Button>
-                        ))}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage === totalPages}
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </Button>
+
+                            {getPageNumbers().map((pageNum) => (
+                                <Button
+                                    key={pageNum}
+                                    variant={currentPage === pageNum ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setCurrentPage(pageNum)}
+                                >
+                                    {pageNum}
+                                </Button>
+                            ))}
+
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                                disabled={currentPage === totalPages}
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </Button>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Edit Modal */}
                 <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
