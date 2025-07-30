@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Grid3X3,
   Users,
+  Database
 } from "lucide-react";
 
 import {
@@ -56,6 +57,11 @@ const menuItems = [
     title: "Payments",
     url: "/dashboard/payments",
     icon: CreditCard,
+  },
+  {
+    title: "Data Sets",
+    url: "/dashboard/data-sets",
+    icon: Database,
   },
   {
     title: "Staffing Need",
